@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to MyAir3 System",
+        "description": "Enter the IP address of your MyAir3 unit",
+        "data": {
+          "host": "IP Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check the IP address and ensure the MyAir3 unit is online and reachable."
+    },
+    "abort": {
+      "already_configured": "This MyAir3 system is already configured."
+    }
+  },
+  "entity": {
+    "climate": {
+      "system": {
+        "name": "System"
+      }
+    },
+    "sensor": {
+      "damper": {
+        "name": "{zone_name} Damper"
+      }
+    }
+  },
+  "system_health": {
+    "info": "MyAir3 system detected and working"
+  }
+}

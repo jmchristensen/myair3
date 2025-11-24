@@ -1,0 +1,11 @@
+{
+    "domain": "myair3",
+    "name": "Advantage Air MyAir3",
+    "codeowners": ["@jmchristensen"],
+    "config_flow": true,
+    "documentation": "https://github.com/jmchristensen/advantage-air-myair3",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "requirements": [],
+    "version": "1.0.0"
+}
