@@ -25,6 +25,18 @@
     "sensor": {
       "damper": {
         "name": "{zone_name} Damper"
+      },
+      "system_actual_temp": {
+        "name": "System Actual Temperature"
+      },
+      "system_target_temp": {
+        "name": "System Target Temperature"
+      },
+      "zone_actual_temp": {
+        "name": "{zone_name} Actual Temperature"
+      },
+      "zone_target_temp": {
+        "name": "{zone_name} Target Temperature"
       }
     }
   },

@@ -121,39 +121,51 @@ class MyAir3Coordinator(DataUpdateCoordinator):
                 raise UpdateFailed(f"HTTP {resp.status}")
             return await resp.text()
 
+    async def _async_set_data(self, url: str, description: str) -> None:
+        """Send command and refresh data."""
+        resp = await self._fetch_xml(url)
+        if "<ack>1</ack>" in resp:
+            await self.async_refresh()
+        else:
+            _LOGGER.warning("ack not returned for %s", description)
+            await self.async_request_refresh()
+
     async def set_system_power(self, power: int) -> None:
         """Turn system on/off. 0=off, 1=on."""
-        await self._fetch_xml(f"http://{self.host}/setSystemData?airconOnOff={power}")
-        await self.async_request_refresh()
+        await self._async_set_data(
+            f"http://{self.host}/setSystemData?airconOnOff={power}", "set_system_power"
+        )
 
     async def set_system_temp(self, temp: float) -> None:
         """Set system target temperature."""
-        await self._fetch_xml(
-            f"http://{self.host}/setSystemData?centralDesiredTemp={temp}"
+        await self._async_set_data(
+            f"http://{self.host}/setSystemData?centralDesiredTemp={temp}",
+            "set_system_temp",
         )
-        await self.async_request_refresh()
 
     async def set_fan_speed(self, speed: int) -> None:
         """Set fan speed. 1=low, 2=medium, 3=high."""
-        await self._fetch_xml(f"http://{self.host}/setSystemData?fanSpeed={speed}")
-        await self.async_request_refresh()
+        await self._async_set_data(
+            f"http://{self.host}/setSystemData?fanSpeed={speed}", "set_fan_speed"
+        )
 
     async def set_zone_power(self, zone: int, power: int) -> None:
         """Turn zone on/off. 0=off, 1=on."""
-        await self._fetch_xml(
-            f"http://{self.host}/setZoneData?zone={zone}&zoneSetting={power}"
+        await self._async_set_data(
+            f"http://{self.host}/setZoneData?zone={zone}&zoneSetting={power}",
+            "set_zone_power",
         )
-        await self.async_request_refresh()
 
     async def set_zone_temp(self, zone: int, temp: float) -> None:
         """Set zone target temperature."""
         setting = self.data["zones"][zone]["setting"]
-        await self._fetch_xml(
-            f"http://{self.host}/setZoneData?zone={zone}&desiredTemp={temp}&zoneSetting={setting}"
+        await self._async_set_data(
+            f"http://{self.host}/setZoneData?zone={zone}&desiredTemp={temp}&zoneSetting={setting}",
+            "set_zone_temp",
         )
-        await self.async_request_refresh()
 
     async def set_hvac_mode(self, mode: int) -> None:
         """Set system mode. 1=cool, 2=heat, 3=fan only."""
-        await self._fetch_xml(f"http://{self.host}/setSystemData?mode={mode}")
-        await self.async_request_refresh()
+        await self._async_set_data(
+            f"http://{self.host}/setSystemData?mode={mode}", "set_hvac_mode"
+        )
