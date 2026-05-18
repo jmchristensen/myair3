@@ -10,6 +10,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MyAir3Coordinator
@@ -28,7 +29,6 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # System sensors
     entities.append(
         MyAir3SystemTempSensor(
             coordinator, config_entry.entry_id, "Actual", "centralActualTemp"
@@ -40,8 +40,8 @@ async def async_setup_entry(
         )
     )
 
-    # Zone sensors
-    for zone_id in coordinator.data["zones"]:
+    zones = coordinator.data.get("zones", {})
+    for zone_id in zones:
         entities.append(MyAir3DamperSensor(coordinator, zone_id, config_entry.entry_id))
         entities.append(
             MyAir3ZoneTempSensor(
@@ -76,6 +76,12 @@ class MyAir3TempSensorBase(SensorEntity):
         self._entry_id = entry_id
         self._data_key = data_key
         self._name_suffix = name_suffix
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name="MyAir3 System",
+            manufacturer="Advantage Air",
+            model="MyAir3",
+        )
 
     @property
     def should_poll(self) -> bool:
@@ -130,8 +136,10 @@ class MyAir3ZoneTempSensor(MyAir3TempSensorBase):
         super().__init__(coordinator, entry_id, name_suffix, data_key)
         self._zone_id = zone_id
         self.translation_key = f"zone_{name_suffix.lower()}_temp"
+        zones = coordinator.data.get("zones", {})
+        zone_name = zones.get(zone_id, {}).get("name", f"Zone {zone_id}")
         self._attr_translation_placeholders = {
-            "zone_name": coordinator.data["zones"][zone_id]["name"]
+            "zone_name": zone_name
         }
         self._attr_unique_id = f"{coordinator.host}_zone_{zone_id}_{data_key}"
 
@@ -169,6 +177,7 @@ class MyAir3DamperSensor(SensorEntity):
 
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_icon = "mdi:valve"
+    _attr_state_class = SensorStateClass.MEASUREMENT
     translation_key = "damper"
 
     def __init__(
@@ -178,10 +187,18 @@ class MyAir3DamperSensor(SensorEntity):
         self.coordinator = coordinator
         self._zone_id = zone_id
         self._entry_id = entry_id
+        zones = coordinator.data.get("zones", {})
+        zone_name = zones.get(zone_id, {}).get("name", f"Zone {zone_id}")
         self._attr_translation_placeholders = {
-            "zone_name": coordinator.data["zones"][zone_id]["name"]
+            "zone_name": zone_name
         }
         self._attr_unique_id = f"{coordinator.host}_zone_{zone_id}_damper"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name="MyAir3 System",
+            manufacturer="Advantage Air",
+            model="MyAir3",
+        )
 
     @property
     def should_poll(self) -> bool:
@@ -190,12 +207,11 @@ class MyAir3DamperSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """Sensor is only available when temperature sensor has low/no battery."""
-        zone = self.coordinator.data["zones"][self._zone_id]
-        # Only show damper sensor when temp sensor is unavailable
-        return self.coordinator.last_update_success and not zone.get(
-            "tempSensorAvailable", True
-        )
+        """Return if entity is available."""
+        if not self.coordinator.last_update_success:
+            return False
+        zone = self.coordinator.data["zones"].get(self._zone_id)
+        return zone is not None
 
     @property
     def native_value(self) -> int | None:

@@ -7,12 +7,12 @@ import aiohttp
 from defusedxml.ElementTree import fromstring
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_SCAN_INTERVAL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, PLATFORMS
+from .const import DEFAULT_PASSWORD, DEFAULT_SCAN_INTERVAL, DOMAIN, PLATFORMS
 from .device_registry import async_setup_device_registry
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,44 +21,66 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up MyAir3 from config entry."""
     host = entry.data[CONF_HOST]
-    coordinator = MyAir3Coordinator(hass, host)
+    password = entry.data.get(CONF_PASSWORD, DEFAULT_PASSWORD)
+    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    coordinator = MyAir3Coordinator(hass, host, password, scan_interval)
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Set up device registry
     await async_setup_device_registry(hass, entry.entry_id)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry."""
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+    return unload_ok
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old config entries."""
+    if config_entry.version == 1:
+        new_data = {**config_entry.data}
+        if CONF_PASSWORD not in new_data:
+            new_data[CONF_PASSWORD] = DEFAULT_PASSWORD
+        hass.config_entries.async_update_entry(
+            config_entry, data=new_data, version=2
+        )
+        _LOGGER.info("Migration to version %s successful", config_entry.version)
+    return True
 
 
 class MyAir3Coordinator(DataUpdateCoordinator):
     """Fetches MyAir3 data."""
 
-    def __init__(self, hass: HomeAssistant, host: str) -> None:
+    def __init__(self, hass: HomeAssistant, host: str, password: str, scan_interval: int = DEFAULT_SCAN_INTERVAL) -> None:
         """Initialize."""
         self.host = host
+        self.password = password
         self.session = async_get_clientsession(hass)
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=30),
+            update_interval=timedelta(seconds=scan_interval),
         )
 
     async def _async_update_data(self):
         """Fetch system data and all zones."""
         try:
-            # Authenticate first
-            await self._fetch_xml(f"http://{self.host}/login?password=password")
+            await self._fetch_xml(f"http://{self.host}/login?password={self.password}")
 
-            # Fetch system data
             sys_xml = await self._fetch_xml(f"http://{self.host}/getSystemData")
             sys_root = fromstring(sys_xml.encode("utf-8"))
             unitcontrol = sys_root.find(".//unitcontrol")
@@ -68,7 +90,6 @@ class MyAir3Coordinator(DataUpdateCoordinator):
 
             num_zones = int(unitcontrol.findtext("numberOfZones", "0") or "0")
 
-            # Fetch each zone
             zones = {}
             for zone_id in range(1, num_zones + 1):
                 zone_xml = await self._fetch_xml(

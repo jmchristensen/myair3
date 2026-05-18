@@ -7,6 +7,9 @@ from homeassistant.const import Platform
 DOMAIN = "myair3"
 PLATFORMS = [Platform.CLIMATE, Platform.SENSOR]
 
+DEFAULT_PASSWORD = "password"
+DEFAULT_SCAN_INTERVAL = 30
+
 # MyAir3 API Mappings (from HA to API integer codes)
 MODE_TO_MYAIR3 = {
     HVACMode.COOL: 1,
@@ -15,8 +18,6 @@ MODE_TO_MYAIR3 = {
 }
 
 # MyAir3 API Fan Speed Mappings (from HA to API integer codes)
-# Assuming 'low': 1, 'medium': 2, 'high': 3 based on your __init__.py function:
-# async def set_fan_speed(self, speed: int) -> None: """Set fan speed. 1=low, 2=medium, 3=high."""
 FAN_MODE_TO_MYAIR3 = {
     "low": 1,
     "medium": 2,

@@ -10,6 +10,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MyAir3Coordinator
@@ -27,9 +28,10 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
 
     entities: list[ClimateEntity] = [MyAir3Climate(coordinator, config_entry.entry_id)]
+    zones = coordinator.data.get("zones", {})
     entities.extend(
         MyAir3Zone(coordinator, zone_id, config_entry.entry_id)
-        for zone_id in coordinator.data["zones"]
+        for zone_id in zones
     )
 
     async_add_entities(entities)
@@ -57,6 +59,12 @@ class MyAir3Climate(ClimateEntity):
         self._entry_id = entry_id
         self._attr_name = "System"
         self._attr_unique_id = f"{coordinator.host}_system"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name="MyAir3 System",
+            manufacturer="Advantage Air",
+            model="MyAir3",
+        )
 
     @property
     def should_poll(self) -> bool:
@@ -144,7 +152,7 @@ class MyAir3Zone(ClimateEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.FAN_ONLY]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL, HVACMode.HEAT, HVACMode.FAN_ONLY]
     _attr_min_temp = 16.0
     _attr_max_temp = 32.0
     _attr_target_temperature_step = 0.5
@@ -156,9 +164,16 @@ class MyAir3Zone(ClimateEntity):
         self.coordinator = coordinator
         self._zone_id = zone_id
         self._entry_id = entry_id
-        zone_name = coordinator.data["zones"][zone_id]["name"]
+        zones = coordinator.data.get("zones", {})
+        zone_name = zones.get(zone_id, {}).get("name", f"Zone {zone_id}")
         self._attr_name = zone_name
         self._attr_unique_id = f"{coordinator.host}_zone_{zone_id}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name="MyAir3 System",
+            manufacturer="Advantage Air",
+            model="MyAir3",
+        )
 
     @property
     def should_poll(self) -> bool:
@@ -193,8 +208,13 @@ class MyAir3Zone(ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
-        setting = self.coordinator.data["zones"][self._zone_id]["setting"]
-        return HVACMode.OFF if setting == 0 else HVACMode.FAN_ONLY
+        zone = self.coordinator.data["zones"][self._zone_id]
+        if zone["setting"] == 0:
+            return HVACMode.OFF
+        system_mode = self.coordinator.data["mode"]
+        return {1: HVACMode.COOL, 2: HVACMode.HEAT, 3: HVACMode.FAN_ONLY}.get(
+            system_mode, HVACMode.FAN_ONLY
+        )
 
     async def async_set_temperature(self, **kwargs):
         """Set target temperature."""
